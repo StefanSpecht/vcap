@@ -54,7 +54,7 @@ def predict_capacity (datafile, predict_years_max, args):
 
         try:
             # fit ARIMA model and print summary
-            model = ARIMA(series, order=(6,1,0))
+            model = ARIMA(series, order=(6,1,1))
             model_fit = model.fit(disp=0)
             if args.verbose:
                 print(model_fit.summary())
@@ -69,7 +69,7 @@ def predict_capacity (datafile, predict_years_max, args):
             while True:
                 try:
                     current_date += timedelta(days=1)
-                    model = ARIMA(history, order=(6,1,0))
+                    model = ARIMA(history, order=(6,1,1))
                     model_fit = model.fit(disp=0)
                     output = model_fit.forecast(steps=1)
                     yhat = output[0]
@@ -132,7 +132,7 @@ def predict_capacity (datafile, predict_years_max, args):
         repo_data_all.append(repo_data)
 
         ## TEST
-        #break
+        break
         ## /TEST
 
     return repo_data_all
@@ -275,7 +275,7 @@ def generate_report(repo_data_all, reportfile, logofile):
     first_page = True
 
     for repo_data in repo_data_all:
-	if y <= margin_bottom:
+        if y <= margin_bottom or first_page == True:
             pdf.showPage()
             y = height - margin_top
             pdf.setFont('Helvetica-Bold', 12)
@@ -285,7 +285,7 @@ def generate_report(repo_data_all, reportfile, logofile):
             pdf.line(x, y, x + 8.3*cm, y)
             y = y - 1.5*cm
             y = y - figsize_y
-            first_page=
+            first_page = False
 
         pdf.setFont('Helvetica', 11)
         Image = ImageReader(repo_data['figure'])
