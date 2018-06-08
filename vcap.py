@@ -54,7 +54,7 @@ def predict_capacity (datafile, predict_years_max, args):
 
         try:
             # fit ARIMA model and print summary
-            model = ARIMA(series, order=(6,1,1))
+            model = ARIMA(series, order=(6,1,0))
             model_fit = model.fit(disp=0)
             if args.verbose:
                 print(model_fit.summary())
@@ -69,7 +69,7 @@ def predict_capacity (datafile, predict_years_max, args):
             while True:
                 try:
                     current_date += timedelta(days=1)
-                    model = ARIMA(history, order=(6,1,1))
+                    model = ARIMA(history, order=(6,1,0))
                     model_fit = model.fit(disp=0)
                     output = model_fit.forecast(steps=1)
                     yhat = output[0]
@@ -265,7 +265,6 @@ def generate_report(repo_data_all, reportfile, logofile):
             pdf.line(margin_left, y, width - margin_right, y)
             y = y - 0.4*cm
 
-    pdf.showPage()
 
     #Create detail pages
     figsize_x = 10*cm
@@ -273,17 +272,21 @@ def generate_report(repo_data_all, reportfile, logofile):
     figspacer = 2*cm
     y = height - margin_top
     x = margin_left
-    pdf.setFont('Helvetica-Bold', 12)
-    pdf.setFillColor("black")
-    pdf.setStrokeColor("black")
-    pdf.drawString(x, y, "CAPACITY FORECAST BY REPOSITORY")
-    y = y - 0.1*cm
-    pdf.setLineWidth(1.0)
-    pdf.line(x, y, x + 8.3*cm, y)
-    y = y - 1.5*cm
-    y = y - figsize_y
+    first_page = True
 
     for repo_data in repo_data_all:
+	if y <= margin_bottom:
+            pdf.showPage()
+            y = height - margin_top
+            pdf.setFont('Helvetica-Bold', 12)
+            pdf.drawString(x, y, "CAPACITY FORECAST BY REPOSITORY")
+            y = y - 0.1*cm
+            pdf.setLineWidth(1.0)
+            pdf.line(x, y, x + 8.3*cm, y)
+            y = y - 1.5*cm
+            y = y - figsize_y
+            first_page=
+
         pdf.setFont('Helvetica', 11)
         Image = ImageReader(repo_data['figure'])
         pdf.drawImage(Image, x, y, figsize_x, figsize_y)
@@ -323,16 +326,6 @@ def generate_report(repo_data_all, reportfile, logofile):
 
 
         y = y - figspacer - figsize_y
-        if y <= margin_bottom:
-            pdf.showPage()
-            y = height - margin_top
-            pdf.setFont('Helvetica-Bold', 12)
-            pdf.drawString(x, y, "CAPACITY FORECAST BY REPOSITORY")
-            y = y - 0.1*cm
-            pdf.setLineWidth(1.0)
-            pdf.line(x, y, x + 8.3*cm, y)
-            y = y - 1.5*cm
-            y = y - figsize_y
 
     pdf.save()
 
