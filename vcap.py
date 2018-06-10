@@ -31,16 +31,14 @@ def predict_capacity (datafile, predict_years_max, args):
 
     #forecast timeseries for each repository
     for name in names:
-
-        ## TEST
-        #name = "ES1_EE2203_Backup_01"
-        ## /TEST
+        
         if not args.quiet:
             print('Processing {}'.format(name))
         df_current = df[df['Name'] == name]
         series = pd.Series(df_current['UsedGB'])
 
-        #Re-index series and forward-fill missing values
+        #Some dates migt be missing within the series, so let's
+        #re-index series and forward-fill missing values
         date_range = pd.date_range(series.index[1].date(), series.index[-1].date())
         series = series.reindex(date_range)
         series.fillna(method='ffill', inplace=True)
@@ -53,11 +51,12 @@ def predict_capacity (datafile, predict_years_max, args):
         }
 
         try:
-            # fit ARIMA model and print summary
-            model = ARIMA(series, order=(6,1,1))
-            model_fit = model.fit(disp=0)
+            # if in verbose mode, fit ARIMA model and print summary
             if args.verbose:
+                model = ARIMA(series, order=(6,1,0))
+                model_fit = model.fit(disp=0)
                 print(model_fit.summary())
+
             history = [x for x in series.values]
             hard_threshold = df_current['StorageTotal'].iloc[-1]
             soft_threshold = hard_threshold * 0.85
@@ -65,11 +64,12 @@ def predict_capacity (datafile, predict_years_max, args):
             predicted_series = pd.Series()
             predicted_series = predicted_series.append(series[-1:])
             enddate = current_date + timedelta(days=(predict_years_max * 365))
-
+            
+            #Do the actual forecasting
             while True:
                 try:
                     current_date += timedelta(days=1)
-                    model = ARIMA(history, order=(6,1,1))
+                    model = ARIMA(history, order=(6,1,0))
                     model_fit = model.fit(disp=0)
                     output = model_fit.forecast(steps=1)
                     yhat = output[0]
@@ -90,7 +90,7 @@ def predict_capacity (datafile, predict_years_max, args):
                     repo_data['did_fit'] = True
                     break
 
-            #scale GB to TB
+            #scale GB to TB if > 1024
             if hard_threshold > 1024:
                 series = series/1024
                 predicted_series = predicted_series/1024
@@ -100,6 +100,7 @@ def predict_capacity (datafile, predict_years_max, args):
             else:
                 ylabel = 'Used [GB]'
 
+            #Plot the data
             fig = plt.figure(figsize=(17*cm/inch, 17*cm/inch))
             plt.title(name)
             plt.plot(series)
@@ -124,20 +125,18 @@ def predict_capacity (datafile, predict_years_max, args):
             plt.axhline(y=soft_threshold, color='y', ls=':')
             plt.ylabel(ylabel)
 
+        #Save the plot in BytesIO data structure
         imgdata = BytesIO()
         fig.savefig(imgdata, format='png')
         imgdata.seek(0) #rewind data
         repo_data['figure'] = imgdata
-
         repo_data_all.append(repo_data)
-
-        ## TEST
-        break
-        ## /TEST
 
     return repo_data_all
 
 def generate_report(repo_data_all, reportfile, logofile):
+    
+    #Sort repo_data by hard_threshold_date
     repo_data_all.sort(key = lambda repo_data: repo_data.get('hard_threshold_date', date.today() + timedelta(days=20*365)))
 
     width, height = A4
@@ -166,7 +165,6 @@ def generate_report(repo_data_all, reportfile, logofile):
     pdf.line(width/4 - 0.4*cm, y, width/4*3 + 0.4*cm, y)
 
     #Generate summary table
-    #title
     y = y - 3*cm
     pdf.setFont('Helvetica-Bold', 12)
     pdf.setFillColor("black")
@@ -346,20 +344,9 @@ def main ():
     logofile = './img/logo.png'
     predict_years_max = args.years  #if forecast does not reach 100% capacity after x
                                     #years, prediction will abort for given repository
-
+    
+    #Predict values & generate report
     repo_data_all = predict_capacity(datafile, predict_years_max, args)
-
-    #TEST - persist data
-    #persistent_data = open('repo_data_all.pkl', 'wb')
-    #pickle.dump(repo_data_all, persistent_data)
-    #persistent_data.close()
-
-    # TEST - load data
-    #persistent_data = open('repo_data_all.pkl', 'rb')
-    #repo_data_all = pickle.load(persistent_data)
-    #persistent_data.close()
-    # /TEST
-
     generate_report(repo_data_all, reportfile, logofile)
 
 if __name__ == '__main__':
