@@ -13,8 +13,48 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm, inch
 import argparse
-#import pickle
+import warnings
+warnings.filterwarnings("ignore")
 
+#Define function to evaluate an ARIMA model. Used by gridsearch function.
+def evaluate_arima_model(X, arima_order):
+    # prepare training dataset
+    train_size = int(len(X) * 0.66)
+    train, test = X[0:train_size], X[train_size:]
+    history = [x for x in train]
+    # make predictions
+    predictions = list()
+    for t in range(len(test)):
+        model = ARIMA(history, order=arima_order)
+        model_fit = model.fit(disp=0)
+        yhat = model_fit.forecast()[0]
+        predictions.append(yhat)
+        history.append(test[t])
+    # calculate out of sample error
+    error = mean_squared_error(test, predictions)
+    return error
+
+#Define gridsearch function to get best ARIMA hyper-parameters
+def evaluate_models(dataset, p_values, d_values, q_values, args):
+    if args.verbose:
+        print ("Evaluating best ARIMA parameters...")
+    dataset = dataset.astype('float32')
+    best_score, best_cfg = float("inf"), None
+    for p in p_values:
+        for d in d_values:
+            for q in q_values:
+                order = (p,d,q)
+                try:
+                    mse = evaluate_arima_model(dataset, order)
+                    if mse < best_score:
+                        best_score, best_cfg = mse, order
+                    if args.verbose:
+                        print('ARIMA%s MSE=%.3f' % (order,mse))
+                except:
+                    continue
+    if not args.quiet:
+        print('Best ARIMA%s MSE=%.3f' % (best_cfg, best_score))
+    return best_cfg
 
 def predict_capacity (datafile, predict_years_max, args):
 
@@ -33,7 +73,7 @@ def predict_capacity (datafile, predict_years_max, args):
     for name in names:
         
         if not args.quiet:
-            print('Processing {}'.format(name))
+            print('\nProcessing {}'.format(name))
         df_current = df[df['Name'] == name]
         series = pd.Series(df_current['UsedGB'])
 
@@ -50,10 +90,12 @@ def predict_capacity (datafile, predict_years_max, args):
             'used_gb': df_current['UsedGB'].iloc[-1]
         }
 
+        best_arima_order = evaluate_models(series.values, range(0,6), range(0,2), range(0,4), args)
+
         try:
             # if in verbose mode, fit ARIMA model and print summary
             if args.verbose:
-                model = ARIMA(series, order=(6,1,0))
+                model = ARIMA(series, order=best_arima_order)
                 model_fit = model.fit(disp=0)
                 print(model_fit.summary())
 
@@ -69,7 +111,7 @@ def predict_capacity (datafile, predict_years_max, args):
             while True:
                 try:
                     current_date += timedelta(days=1)
-                    model = ARIMA(history, order=(6,1,0))
+                    model = ARIMA(history, order=best_arima_order)
                     model_fit = model.fit(disp=0)
                     output = model_fit.forecast(steps=1)
                     yhat = output[0]
